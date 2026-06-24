@@ -2,6 +2,7 @@
 """VolteX agent orchestrator — local task dispatcher."""
 
 import argparse
+import os
 import shutil
 import subprocess
 import sys
@@ -17,6 +18,7 @@ LOGS_DIR = VOLTEX_ROOT / "orchestrator" / "logs"
 PROTECTED_BRANCH = "main"
 MAX_TURNS = 3
 TIMEOUT_SECONDS = 300
+CODEX_FALLBACK_PATH = r"C:\Users\RDPJarvis\AppData\Local\Programs\OpenAI\Codex\bin\codex.exe"
 
 AGENTS = {
     "claude": {
@@ -29,11 +31,8 @@ AGENTS = {
         "worktree": VOLTEX_ROOT / "project-chatgpt",
         "branch": "agent/chatgpt",
         "cli": "codex",
-        "available": False,
-        "unavailable_reason": (
-            "Codex CLI not installed. "
-            "Install and verify before using this worker."
-        ),
+        "available": True,
+        "cli_fallback": CODEX_FALLBACK_PATH,
     },
 }
 
@@ -49,16 +48,30 @@ def get_current_branch(worktree: Path) -> str:
     return r.stdout.strip()
 
 
-def resolve_cli(name: str) -> str | None:
-    """Return the absolute path to a CLI, checking Windows .cmd/.ps1 wrappers."""
-    return (
+def resolve_cli(name: str, fallback: str | None = None) -> str | None:
+    """Return the absolute path to a CLI.
+
+    Resolution order:
+    1. <NAME>_CLI_PATH env var (e.g. CODEX_CLI_PATH, CLAUDE_CLI_PATH)
+    2. PATH lookup (.cmd / .ps1 wrappers included)
+    3. Explicit fallback path (known install location)
+    """
+    env_path = os.environ.get(name.upper().replace("-", "_") + "_CLI_PATH")
+    if env_path and Path(env_path).is_file():
+        return env_path
+    found = (
         shutil.which(name)
         or shutil.which(name + ".cmd")
         or shutil.which(name + ".ps1")
     )
+    if found:
+        return found
+    if fallback and Path(fallback).is_file():
+        return fallback
+    return None
 
 
-def make_exec_cmd(cmd: list[str]) -> list[str]:
+def make_exec_cmd(cmd: list[str], cli_fallback: str | None = None) -> list[str]:
     """
     Resolve the CLI to its absolute path and build a directly executable
     command without shell=True.
@@ -67,7 +80,7 @@ def make_exec_cmd(cmd: list[str]) -> list[str]:
     they require cmd.exe. We wrap them explicitly rather than using shell=True
     to avoid any shell injection surface from task text.
     """
-    cli_path = resolve_cli(cmd[0])
+    cli_path = resolve_cli(cmd[0], fallback=cli_fallback)
     if cli_path is None:
         return cmd  # unresolved — let subprocess raise FileNotFoundError
 
@@ -81,7 +94,7 @@ def build_command(agent_name: str, task: str) -> list[str]:
     if agent_name == "claude":
         return ["claude", "-p", "--max-turns", str(MAX_TURNS), task]
     if agent_name == "codex":
-        return ["codex", "exec", task]
+        return ["codex", "exec", "--sandbox", "read-only", task]
     raise ValueError(f"Unknown agent: {agent_name}")
 
 # ---------------------------------------------------------------------------
@@ -130,12 +143,13 @@ def run_task(agent_name: str, task: str, dry_run: bool) -> int:
         print("[dry-run] No execution. Command printed above.")
         return 0
 
-    cli_path = resolve_cli(cmd[0])
+    cli_fallback = agent.get("cli_fallback")
+    cli_path = resolve_cli(cmd[0], fallback=cli_fallback)
     if cli_path is None:
         print(f"ERROR: '{cmd[0]}' not found on PATH.", file=sys.stderr)
         return 127
 
-    exec_cmd = make_exec_cmd(cmd)
+    exec_cmd = make_exec_cmd(cmd, cli_fallback=cli_fallback)
     print(f"resolved : {cli_path}")
     print(f"exec_cmd : {' '.join(exec_cmd)}")
 
@@ -149,6 +163,7 @@ def run_task(agent_name: str, task: str, dry_run: bool) -> int:
             exec_cmd,
             cwd=str(worktree),
             timeout=TIMEOUT_SECONDS,
+            stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,

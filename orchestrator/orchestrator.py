@@ -49,6 +49,15 @@ def get_current_branch(worktree: Path) -> str:
     return r.stdout.strip()
 
 
+def cli_available(name: str) -> bool:
+    """Check CLI availability, accounting for Windows .cmd/.ps1 wrappers."""
+    if shutil.which(name):
+        return True
+    if sys.platform == "win32":
+        return bool(shutil.which(name + ".cmd") or shutil.which(name + ".ps1"))
+    return False
+
+
 def build_command(agent_name: str, task: str) -> list[str]:
     if agent_name == "claude":
         return ["claude", "-p", "--max-turns", str(MAX_TURNS), task]
@@ -102,7 +111,7 @@ def run_task(agent_name: str, task: str, dry_run: bool) -> int:
         print("[dry-run] No execution. Command printed above.")
         return 0
 
-    if not shutil.which(cmd[0]):
+    if not cli_available(cmd[0]):
         print(f"ERROR: '{cmd[0]}' not found on PATH.", file=sys.stderr)
         return 127
 
@@ -121,6 +130,7 @@ def run_task(agent_name: str, task: str, dry_run: bool) -> int:
             text=True,
             encoding="utf-8",
             errors="replace",
+            shell=(sys.platform == "win32"),  # .cmd wrappers require shell on Windows
         )
         end = datetime.now()
         stdout, stderr, returncode = proc.stdout, proc.stderr, proc.returncode

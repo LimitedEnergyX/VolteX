@@ -1,0 +1,63 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg
+*.egg-info/
+.eggs/
+dist/
+build/
+.venv/
+venv/
+env/
+
+# Node
+node_modules/
+.npm/
+*.tsbuildinfo
+
+# Environment / secrets
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+credentials/
+*.token
+*.secret
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+ehthumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.swp
+*.swo
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+
+# Temp
+tmp/
+temp/
+*.tmp
+*.bak
+
+# Revit (future)
+*.rvt
+*.rfa
+*.rte
+*.rft

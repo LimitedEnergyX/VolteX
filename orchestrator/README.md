@@ -1,52 +1,92 @@
 # Orchestrator
 
-Coordinates task assignment between Claude and Codex agents.
+Local task dispatcher for VolteX multi-agent workflow.
+Routes tasks to Claude or Codex workers via headless CLI calls.
 
-## Status
+## Purpose
 
-Planned. Not yet implemented.
+The orchestrator is the single control point for assigning work to agents.
+It enforces branch safety, logs every run, and handles agent unavailability cleanly.
+It does not directly edit code — agents do that in their own worktrees.
 
-## Planned Capabilities
+## Requirements
 
-- Accept a task (GitHub Issue number or plain text prompt)
-- Choose the correct agent (Claude or Codex) based on task type
-- Run the correct CLI command with the correct working directory
-- Log stdout/stderr to a timestamped file
-- Enforce per-invocation timeout and max-turn limits
-- Post status updates to a Discord webhook (future)
+- Python 3.9+
+- `claude` CLI on PATH (Claude Code, authenticated)
+- `codex` CLI on PATH (when Codex worker is enabled — not yet installed)
 
-## Planned CLI
+## Usage
 
-```bash
-python orchestrator.py --task "Implement X from issue #5" --agent claude
-python orchestrator.py --task "Review PR #6 for risks" --agent codex
-python orchestrator.py --issue 7 --agent claude
+```powershell
+cd D:\AI-Agents\VolteX\project-main\orchestrator
+
+# Dry run — print command, do not execute
+python orchestrator.py run --agent claude --task "Summarize this repo. Do not edit files." --dry-run
+
+# Live run
+python orchestrator.py run --agent claude --task "Summarize this repo. Do not edit files."
+
+# Help
+python orchestrator.py --help
+python orchestrator.py run --help
 ```
 
-## Agent Commands (Reference)
+## Agents
+
+| Agent  | Status      | CLI command                               | Worktree          |
+|--------|-------------|-------------------------------------------|-------------------|
+| claude | Available   | `claude -p --max-turns 3 "<task>"`        | project-claude    |
+| codex  | Unavailable | `codex exec "<task>"` (not yet installed) | project-chatgpt   |
+
+## Logs
+
+Every live run writes a timestamped log to:
+
+```
+D:\AI-Agents\VolteX\orchestrator\logs\YYYY-MM-DD_HH-MM-SS_<agent>.log
+```
+
+Log contents: agent, branch, worktree, command, start time, end time,
+duration, return code, stdout, stderr.
+
+Logs are written outside the git repo and are not committed.
+
+## Safety Rules
+
+- **Refuses to run if the worktree is on `main`.** Hard block — no exceptions.
+- **Always test with `--dry-run` first** before a live run.
+- **No edit-capable mode by default.** Read-only tasks only unless the task
+  prompt explicitly asks the agent to edit, and the agent's own guardrails permit it.
+- **Timeout:** 300 seconds hard limit per invocation.
+- **No secrets in task prompts.** Never pass tokens, keys, or credentials as task strings.
+- **Codex unavailability fails cleanly** — clear error message, non-zero exit.
+
+## Current Limitations
+
+- Fixed Windows paths (`D:\AI-Agents\VolteX\`). Not portable across machines.
+- Single-turn dispatch only. No multi-step task chaining yet.
+- No Discord integration. Status reporting is console and log file only.
+- Codex worker disabled until CLI is installed and `OPENAI_API_KEY` is set.
+- Claude subprocess auth requires an authenticated terminal session.
+  Set `ANTHROPIC_API_KEY` as a User env var for non-interactive/scheduled use.
+
+## Agent Commands Reference
 
 ```bash
-# Claude — read-only mode
+# Claude — read-only
 claude -p --max-turns 3 "<task>"
 
-# Codex — read-only mode
+# Codex — read-only (when available)
 codex exec "<task>"
 
-# Codex — with file edits allowed
+# Codex — with file edits (when available)
 codex exec --sandbox workspace-write "<task>"
 ```
 
-## Worktree Paths
+## Next Planned Steps
 
-| Agent  | Working Directory                      | Branch          |
-|--------|----------------------------------------|-----------------|
-| Claude | D:\AI-Agents\VolteX\project-claude\   | agent/claude    |
-| Codex  | D:\AI-Agents\VolteX\project-chatgpt\  | agent/chatgpt   |
-
-## Implementation Notes
-
-- Use `subprocess.run()` with `cwd` set to the correct worktree path
-- Capture stdout/stderr, write to `logs/YYYY-MM-DD_HH-MM_<agent>.log`
-- Hard timeout: 300 seconds per invocation
-- Max turns enforced via `--max-turns` flag (Claude) and Codex sandbox settings
-- Never run both agents on the same task simultaneously without a conflict check
+1. Prove live Claude run end-to-end from the orchestrator
+2. Install Codex CLI and enable the codex worker
+3. Add `--issue` flag to pull task text from a GitHub Issue number
+4. Add a Discord webhook status post after each run
+5. Add multi-agent handoff: Claude completes task, Codex reviews the PR

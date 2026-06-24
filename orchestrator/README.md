@@ -78,6 +78,30 @@ report to stdout and stops. No automatic escalation or retry.
 | claude | Available | `claude -p --max-turns 3 "<task>"`                   | project-claude  |
 | codex  | Available | `codex exec --sandbox read-only "<task>"`            | project-chatgpt |
 
+## Review Transcripts
+
+After every live (non-dry-run) `review` call, a Markdown transcript is written to:
+
+```
+D:\AI-Agents\VolteX\orchestrator\reviews\YYYY-MM-DD_HH-MM-SS_review.md
+```
+
+Use `--out PATH` to write to a specific file instead:
+
+```powershell
+python orchestrator.py review --packet-file packet.md --out C:\tmp\my_review.md
+```
+
+Each transcript contains two sections:
+
+- **Executive Summary** -- plain English: what was reviewed, the verdict, and the
+  Codex recommendation as-is. Readable without interpreting agent shorthand.
+- **Agent Technical Record** -- original packet, raw Codex response, parsed verdict,
+  structured fields, exit code, and log path.
+
+Transcripts are written outside the git repo (`orchestrator/reviews/` is gitignored).
+`--dry-run` writes no transcript.
+
 ## Logs
 
 Every live run writes a timestamped log to:

@@ -33,10 +33,10 @@ python orchestrator.py run --help
 
 ## Agents
 
-| Agent  | Status      | CLI command                               | Worktree          |
-|--------|-------------|-------------------------------------------|-------------------|
-| claude | Available   | `claude -p --max-turns 3 "<task>"`        | project-claude    |
-| codex  | Unavailable | `codex exec "<task>"` (not yet installed) | project-chatgpt   |
+| Agent  | Status    | CLI command                                          | Worktree        |
+|--------|-----------|------------------------------------------------------|-----------------|
+| claude | Available | `claude -p --max-turns 3 "<task>"`                   | project-claude  |
+| codex  | Available | `codex exec --sandbox read-only "<task>"`            | project-chatgpt |
 
 ## Logs
 
@@ -59,14 +59,16 @@ Logs are written outside the git repo and are not committed.
   prompt explicitly asks the agent to edit, and the agent's own guardrails permit it.
 - **Timeout:** 300 seconds hard limit per invocation.
 - **No secrets in task prompts.** Never pass tokens, keys, or credentials as task strings.
-- **Codex unavailability fails cleanly** — clear error message, non-zero exit.
+- **Codex runs read-only by default** (`--sandbox read-only`). Write-capable mode is not enabled.
+- **stdin is closed** (`subprocess.DEVNULL`) for all agents — prevents interactive hangs in headless mode.
 
 ## Current Limitations
 
 - Fixed Windows paths (`D:\AI-Agents\VolteX\`). Not portable across machines.
 - Single-turn dispatch only. No multi-step task chaining yet.
 - No Discord integration. Status reporting is console and log file only.
-- Codex worker disabled until CLI is installed and `OPENAI_API_KEY` is set.
+- Codex worker resolves binary via: `CODEX_CLI_PATH` env var → PATH → `C:\Users\RDPJarvis\AppData\Local\Programs\OpenAI\Codex\bin\codex.exe`.
+- Codex write-capable mode (`--sandbox workspace-write`) is not enabled.
 - Claude subprocess auth requires an authenticated terminal session.
   Set `ANTHROPIC_API_KEY` as a User env var for non-interactive/scheduled use.
 
@@ -76,11 +78,11 @@ Logs are written outside the git repo and are not committed.
 # Claude — read-only
 claude -p --max-turns 3 "<task>"
 
-# Codex — read-only (when available)
-codex exec "<task>"
+# Codex — read-only (default, always)
+codex exec --sandbox read-only "<task>"
 
-# Codex — with file edits (when available)
-codex exec --sandbox workspace-write "<task>"
+# Codex — write-capable (NOT enabled — future phase only)
+# codex exec --sandbox workspace-write "<task>"
 ```
 
 ## Next Planned Steps

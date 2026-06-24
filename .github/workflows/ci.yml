@@ -23,5 +23,11 @@ jobs:
       - name: Compile orchestrator
         run: python -m py_compile orchestrator/orchestrator.py
 
-      - name: Smoke test — help
+      - name: Compile make_packet
+        run: python -m py_compile tools/make_packet.py
+
+      - name: Smoke test -- orchestrator help
         run: python orchestrator/orchestrator.py --help
+
+      - name: Smoke test -- make_packet help
+        run: python tools/make_packet.py --help

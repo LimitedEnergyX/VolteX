@@ -49,13 +49,32 @@ def get_current_branch(worktree: Path) -> str:
     return r.stdout.strip()
 
 
-def cli_available(name: str) -> bool:
-    """Check CLI availability, accounting for Windows .cmd/.ps1 wrappers."""
-    if shutil.which(name):
-        return True
-    if sys.platform == "win32":
-        return bool(shutil.which(name + ".cmd") or shutil.which(name + ".ps1"))
-    return False
+def resolve_cli(name: str) -> str | None:
+    """Return the absolute path to a CLI, checking Windows .cmd/.ps1 wrappers."""
+    return (
+        shutil.which(name)
+        or shutil.which(name + ".cmd")
+        or shutil.which(name + ".ps1")
+    )
+
+
+def make_exec_cmd(cmd: list[str]) -> list[str]:
+    """
+    Resolve the CLI to its absolute path and build a directly executable
+    command without shell=True.
+
+    On Windows, .cmd/.bat files are not directly executable by CreateProcess —
+    they require cmd.exe. We wrap them explicitly rather than using shell=True
+    to avoid any shell injection surface from task text.
+    """
+    cli_path = resolve_cli(cmd[0])
+    if cli_path is None:
+        return cmd  # unresolved — let subprocess raise FileNotFoundError
+
+    if sys.platform == "win32" and cli_path.lower().endswith((".cmd", ".bat")):
+        return ["cmd", "/c", cli_path] + cmd[1:]
+
+    return [cli_path] + cmd[1:]
 
 
 def build_command(agent_name: str, task: str) -> list[str]:
@@ -111,9 +130,14 @@ def run_task(agent_name: str, task: str, dry_run: bool) -> int:
         print("[dry-run] No execution. Command printed above.")
         return 0
 
-    if not cli_available(cmd[0]):
+    cli_path = resolve_cli(cmd[0])
+    if cli_path is None:
         print(f"ERROR: '{cmd[0]}' not found on PATH.", file=sys.stderr)
         return 127
+
+    exec_cmd = make_exec_cmd(cmd)
+    print(f"resolved : {cli_path}")
+    print(f"exec_cmd : {' '.join(exec_cmd)}")
 
     LOGS_DIR.mkdir(parents=True, exist_ok=True)
     ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -122,7 +146,7 @@ def run_task(agent_name: str, task: str, dry_run: bool) -> int:
 
     try:
         proc = subprocess.run(
-            cmd,
+            exec_cmd,
             cwd=str(worktree),
             timeout=TIMEOUT_SECONDS,
             stdout=subprocess.PIPE,
@@ -130,7 +154,6 @@ def run_task(agent_name: str, task: str, dry_run: bool) -> int:
             text=True,
             encoding="utf-8",
             errors="replace",
-            shell=(sys.platform == "win32"),  # .cmd wrappers require shell on Windows
         )
         end = datetime.now()
         stdout, stderr, returncode = proc.stdout, proc.stderr, proc.returncode
@@ -151,6 +174,8 @@ def run_task(agent_name: str, task: str, dry_run: bool) -> int:
         f.write(f"branch     : {branch}\n")
         f.write(f"worktree   : {worktree}\n")
         f.write(f"command    : {' '.join(cmd)}\n")
+        f.write(f"resolved   : {cli_path}\n")
+        f.write(f"exec_cmd   : {' '.join(exec_cmd)}\n")
         f.write(f"start      : {start.isoformat()}\n")
         f.write(f"end        : {end.isoformat()}\n")
         f.write(f"duration   : {(end - start).total_seconds():.1f}s\n")

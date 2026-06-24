@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""VolteX agent orchestrator — local task dispatcher."""
+"""VolteX agent orchestrator -- local task dispatcher."""
 
 import argparse
 import os
@@ -11,7 +11,7 @@ from datetime import datetime
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
-# Config — fixed local paths (single-machine setup)
+# Config -- fixed local paths (single-machine setup)
 # ---------------------------------------------------------------------------
 
 VOLTEX_ROOT = Path(r"D:\AI-Agents\VolteX")
@@ -22,7 +22,7 @@ TIMEOUT_SECONDS = 300
 CODEX_FALLBACK_PATH = r"C:\Users\RDPJarvis\AppData\Local\Programs\OpenAI\Codex\bin\codex.exe"
 
 # ---------------------------------------------------------------------------
-# Review bridge — structured verdict protocol
+# Review bridge -- structured verdict protocol
 # ---------------------------------------------------------------------------
 
 REVIEW_PROMPT_TEMPLATE = """\
@@ -36,11 +36,11 @@ If VERDICT is "Approved":
 
 If VERDICT is "Approved with changes" or "Do not proceed":
   VERDICT: <Approved with changes | Do not proceed>
-  CONSTRAINT: <one sentence — what specific problem exists>
-  PROPOSED_SOLUTION: <one sentence — what must change>
-  COST_IMPACT: <one sentence — effort or risk level>
-  TIMELINE: <one sentence — when this could be resolved>
-  RECOMMENDATION: <one sentence — summary action>
+  CONSTRAINT: <one sentence -- what specific problem exists>
+  PROPOSED_SOLUTION: <one sentence -- what must change>
+  COST_IMPACT: <one sentence -- effort or risk level>
+  TIMELINE: <one sentence -- when this could be resolved>
+  RECOMMENDATION: <one sentence -- summary action>
 
 --- REVIEW PACKET ---
 {packet}
@@ -111,13 +111,13 @@ def make_exec_cmd(cmd: list[str], cli_fallback: str | None = None) -> list[str]:
     Resolve the CLI to its absolute path and build a directly executable
     command without shell=True.
 
-    On Windows, .cmd/.bat files are not directly executable by CreateProcess —
+    On Windows, .cmd/.bat files are not directly executable by CreateProcess --
     they require cmd.exe. We wrap them explicitly rather than using shell=True
     to avoid any shell injection surface from task text.
     """
     cli_path = resolve_cli(cmd[0], fallback=cli_fallback)
     if cli_path is None:
-        return cmd  # unresolved — let subprocess raise FileNotFoundError
+        return cmd  # unresolved -- let subprocess raise FileNotFoundError
 
     if sys.platform == "win32" and cli_path.lower().endswith((".cmd", ".bat")):
         return ["cmd", "/c", cli_path] + cmd[1:]

@@ -26,10 +26,50 @@ python orchestrator.py run --agent claude --task "Summarize this repo. Do not ed
 # Live run
 python orchestrator.py run --agent claude --task "Summarize this repo. Do not edit files."
 
+# Send a review packet to Codex and capture a structured verdict
+python orchestrator.py review --packet "Proposal text here..."
+python orchestrator.py review --packet-file path\to\packet.txt
+
 # Help
 python orchestrator.py --help
 python orchestrator.py run --help
+python orchestrator.py review --help
 ```
+
+## Review Bridge
+
+The `review` subcommand sends a review packet to the Codex agent (read-only) and
+parses its response into a structured verdict.
+
+**Verdict format Codex must return:**
+
+```
+VERDICT: Approved
+RECOMMENDATION: <one sentence>
+```
+
+or, for disagreement:
+
+```
+VERDICT: Approved with changes   # or: Do not proceed
+CONSTRAINT: <one sentence>
+PROPOSED_SOLUTION: <one sentence>
+COST_IMPACT: <one sentence>
+TIMELINE: <one sentence>
+RECOMMENDATION: <one sentence>
+```
+
+**Exit codes:**
+
+| Code | Meaning |
+|------|---------|
+| 0 | Approved |
+| 1 | Error — Codex failed or no verdict found |
+| 2 | Approved with changes — human review required |
+| 3 | Do not proceed — stop and resolve constraint |
+
+If Codex returns exit 2 or 3, the orchestrator prints the structured disagreement
+report to stdout and stops. No automatic escalation or retry.
 
 ## Agents
 

@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""VolteX agent orchestrator — local task dispatcher."""
+"""VolteX agent orchestrator -- local task dispatcher."""
 
 import argparse
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -10,7 +11,7 @@ from datetime import datetime
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
-# Config — fixed local paths (single-machine setup)
+# Config -- fixed local paths (single-machine setup)
 # ---------------------------------------------------------------------------
 
 VOLTEX_ROOT = Path(r"D:\AI-Agents\VolteX")
@@ -19,6 +20,40 @@ PROTECTED_BRANCH = "main"
 MAX_TURNS = 3
 TIMEOUT_SECONDS = 300
 CODEX_FALLBACK_PATH = r"C:\Users\RDPJarvis\AppData\Local\Programs\OpenAI\Codex\bin\codex.exe"
+
+# ---------------------------------------------------------------------------
+# Review bridge -- structured verdict protocol
+# ---------------------------------------------------------------------------
+
+REVIEW_PROMPT_TEMPLATE = """\
+You are a technical reviewer. Analyze the proposal below and respond with ONLY a structured verdict.
+
+DO NOT edit any files. DO NOT run any commands. Return ONLY the formatted verdict.
+
+If VERDICT is "Approved":
+  VERDICT: Approved
+  RECOMMENDATION: <one sentence>
+
+If VERDICT is "Approved with changes" or "Do not proceed":
+  VERDICT: <Approved with changes | Do not proceed>
+  CONSTRAINT: <one sentence -- what specific problem exists>
+  PROPOSED_SOLUTION: <one sentence -- what must change>
+  COST_IMPACT: <one sentence -- effort or risk level>
+  TIMELINE: <one sentence -- when this could be resolved>
+  RECOMMENDATION: <one sentence -- summary action>
+
+--- REVIEW PACKET ---
+{packet}
+"""
+
+VERDICT_RE = re.compile(
+    r"^VERDICT:\s*(Approved with changes|Do not proceed|Approved)\s*$",
+    re.MULTILINE | re.IGNORECASE,
+)
+FIELD_RE = re.compile(
+    r"^(CONSTRAINT|PROPOSED_SOLUTION|COST_IMPACT|TIMELINE|RECOMMENDATION):\s*(.+?)\s*$",
+    re.MULTILINE,
+)
 
 AGENTS = {
     "claude": {
@@ -76,13 +111,13 @@ def make_exec_cmd(cmd: list[str], cli_fallback: str | None = None) -> list[str]:
     Resolve the CLI to its absolute path and build a directly executable
     command without shell=True.
 
-    On Windows, .cmd/.bat files are not directly executable by CreateProcess —
+    On Windows, .cmd/.bat files are not directly executable by CreateProcess --
     they require cmd.exe. We wrap them explicitly rather than using shell=True
     to avoid any shell injection surface from task text.
     """
     cli_path = resolve_cli(cmd[0], fallback=cli_fallback)
     if cli_path is None:
-        return cmd  # unresolved — let subprocess raise FileNotFoundError
+        return cmd  # unresolved -- let subprocess raise FileNotFoundError
 
     if sys.platform == "win32" and cli_path.lower().endswith((".cmd", ".bat")):
         return ["cmd", "/c", cli_path] + cmd[1:]
@@ -96,6 +131,81 @@ def build_command(agent_name: str, task: str) -> list[str]:
     if agent_name == "codex":
         return ["codex", "exec", "--sandbox", "read-only", task]
     raise ValueError(f"Unknown agent: {agent_name}")
+
+
+def _latest_log(agent_name: str) -> Path | None:
+    logs = sorted(LOGS_DIR.glob(f"*_{agent_name}.log"))
+    return logs[-1] if logs else None
+
+
+def _stdout_from_log(log_path: Path) -> str:
+    text = log_path.read_text(encoding="utf-8", errors="replace")
+    marker = "--- stdout ---\n"
+    idx = text.find(marker)
+    if idx == -1:
+        return ""
+    after = text[idx + len(marker):]
+    end = after.find("\n--- stderr ---")
+    return after[:end] if end != -1 else after
+
+
+def parse_verdict(output: str) -> dict:
+    m = VERDICT_RE.search(output)
+    verdict = m.group(1).strip() if m else None
+    if verdict:
+        # Normalise casing to canonical form
+        canonical = {v.lower(): v for v in ("Approved", "Approved with changes", "Do not proceed")}
+        verdict = canonical.get(verdict.lower(), verdict)
+    fields = dict(FIELD_RE.findall(output))
+    return {"verdict": verdict, "fields": fields}
+
+
+def run_review(packet: str, dry_run: bool) -> int:
+    task = REVIEW_PROMPT_TEMPLATE.format(packet=packet)
+    rc = run_task("codex", task, dry_run)
+
+    if dry_run:
+        return rc
+
+    if rc != 0:
+        print(
+            f"ERROR: Codex exited {rc}. Check the log above.",
+            file=sys.stderr,
+        )
+        return 1
+
+    log_path = _latest_log("codex")
+    if log_path is None:
+        print("ERROR: No Codex log found after run.", file=sys.stderr)
+        return 1
+
+    stdout = _stdout_from_log(log_path)
+    result = parse_verdict(stdout)
+    verdict = result["verdict"]
+    fields = result["fields"]
+
+    print("\n" + "=" * 60)
+    print(f"REVIEW VERDICT: {verdict or 'NOT FOUND'}")
+    print("=" * 60)
+
+    if verdict is None:
+        print(
+            "WARNING: Codex did not return a structured verdict.\n"
+            "Raw output is in the log file above.",
+            file=sys.stderr,
+        )
+        return 1
+
+    rec = fields.get("RECOMMENDATION", "")
+    if verdict == "Approved":
+        if rec:
+            print(f"RECOMMENDATION: {rec}")
+        return 0
+
+    for field in ("CONSTRAINT", "PROPOSED_SOLUTION", "COST_IMPACT", "TIMELINE", "RECOMMENDATION"):
+        print(f"{field}: {fields.get(field, 'Not provided')}")
+
+    return 2 if verdict == "Approved with changes" else 3
 
 # ---------------------------------------------------------------------------
 # Core
@@ -218,6 +328,14 @@ def cmd_run(args) -> int:
     return run_task(args.agent, args.task, args.dry_run)
 
 
+def cmd_review(args) -> int:
+    if args.packet_file:
+        packet = Path(args.packet_file).read_text(encoding="utf-8")
+    else:
+        packet = args.packet
+    return run_review(packet, args.dry_run)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         prog="orchestrator",
@@ -236,6 +354,25 @@ def main() -> int:
         help="Print the command without executing",
     )
     run_p.set_defaults(func=cmd_run)
+
+    review_p = sub.add_parser(
+        "review",
+        help="Send a review packet to Codex and capture a structured verdict",
+    )
+    packet_group = review_p.add_mutually_exclusive_group(required=True)
+    packet_group.add_argument(
+        "--packet", metavar="TEXT",
+        help="Review packet as an inline string",
+    )
+    packet_group.add_argument(
+        "--packet-file", metavar="PATH",
+        help="Path to a file containing the review packet",
+    )
+    review_p.add_argument(
+        "--dry-run", action="store_true",
+        help="Print the Codex command without executing",
+    )
+    review_p.set_defaults(func=cmd_review)
 
     args = parser.parse_args()
     return args.func(args)

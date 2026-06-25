@@ -1,4 +1,11 @@
-# AGENTS.md — VolteX Multi-Agent Workflow Rules
+# AGENTS.md -- VolteX Multi-Agent Workflow Rules
+
+## Scope
+
+VolteX is the coding-assistant coordination platform, not the downstream
+application being built. Revit is deferred and is not active scope; it is
+tracked as downstream work (see [docs/SCOPE.md](docs/SCOPE.md)). These rules
+govern how the agents coordinate that platform.
 
 ## Agents
 
@@ -40,7 +47,7 @@ codex exec --sandbox workspace-write "<task>"
 - No secrets, tokens, credentials, API keys, or auth files in any commit.
 - No direct edits to `main`.
 - No agent touches the other agent's worktree or branch.
-- No Revit plugin code until architecture phase is complete and merged.
+- No Revit implementation in this repo. Revit is deferred downstream work, not active VolteX scope (see [docs/SCOPE.md](docs/SCOPE.md)).
 - No Discord bot code until local CLI bridge is proven working.
 
 ## Task Protocol

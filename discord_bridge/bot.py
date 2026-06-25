@@ -2,15 +2,16 @@
 """VolteX Discord operator interface (MVP).
 
 Slash commands only. Minimal intents. No message-content intent. Guild-scoped
-command sync. The bot is read-only / template-only: it does NOT run Codex, call
-orchestrator review, mutate GitHub, or execute approvals.
+command sync. The bot does not mutate GitHub or execute approvals. /voltex review
+runs exactly one Codex read-only review through the existing orchestrator review
+bridge (reused unchanged); all other commands are read-only / template-only.
 
 Fail closed: the bot refuses to start unless DISCORD_BOT_TOKEN, VOLTEX_GUILD_ID,
 VOLTEX_ALLOWED_USER_ID, and VOLTEX_ALLOWED_CHANNEL_ID are all set and valid.
 Every command checks guild ID, user ID, and channel ID before doing anything.
 
 See discord_bridge/README.md for setup. Commands: /voltex status, /voltex latest,
-/voltex packet. (/voltex review is intentionally deferred to PR #11.)
+/voltex packet, /voltex review.
 """
 
 import os
@@ -21,11 +22,17 @@ import discord
 from discord import app_commands
 
 import report
+import review_runner
 
 # Populated by main() at runtime (not at import) so the module stays importable
 # and compilable without configuration present.
 CONFIG = {}
 GUILD = None
+
+# Hard single-review lock: True while a /voltex review runs. It is checked and
+# set with no await in between, so on the single-threaded event loop a concurrent
+# /voltex review is rejected (never queued).
+_review_in_flight = False
 
 
 def _load_dotenv():
@@ -191,6 +198,61 @@ async def packet(interaction):
         f"```\n{template}\n```",
         ephemeral=True,
     )
+
+
+def _format_result(result):
+    """Format a ReviewResult for Discord, clearly separating a review verdict
+    from a bot/process failure."""
+    if result.ok:
+        lines = [f"**Review verdict:** {result.verdict}"]
+        if result.recommendation:
+            lines.append(f"**Recommendation:** {result.recommendation}")
+        if result.transcript:
+            lines.append(f"**Transcript:** `{result.transcript}`")
+        lines.append("Use `/voltex latest` for the latest transcript.")
+    else:
+        lines = [
+            "**Bot/process failure** (this is NOT a review verdict).",
+            f"- {result.error}",
+        ]
+        if result.detail:
+            lines.append(f"- detail: {result.detail}")
+        lines.append("Use `/voltex latest` for the latest transcript if one exists.")
+    msg = "\n".join(lines)
+    return msg if len(msg) <= 1900 else msg[:1900] + " ..."
+
+
+@voltex.command(
+    name="review",
+    description="Run one Codex read-only review of an inline packet (one at a time)",
+)
+@app_commands.describe(
+    packet="The review packet text (inline only -- no files or attachments)"
+)
+async def review(interaction, packet: str):
+    global _review_in_flight
+    if not _authorized(interaction):
+        await _reject(interaction)
+        return
+    ok, message = review_runner.validate_packet(packet)
+    if not ok:
+        await interaction.response.send_message(message, ephemeral=True)
+        return
+    # Reject (never queue) a concurrent review. The flag is set before any await,
+    # so two near-simultaneous invocations cannot both pass this gate.
+    if _review_in_flight:
+        await interaction.response.send_message(
+            "A review is already running; please wait for it to finish.",
+            ephemeral=True,
+        )
+        return
+    _review_in_flight = True
+    try:
+        await interaction.response.defer(ephemeral=True)
+        result = await review_runner.run_review(packet)
+        await interaction.followup.send(_format_result(result), ephemeral=True)
+    finally:
+        _review_in_flight = False
 
 
 def main():

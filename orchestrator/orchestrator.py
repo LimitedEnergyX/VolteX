@@ -332,17 +332,26 @@ def run_review(packet: str, dry_run: bool, out_path: Path | None = None) -> int:
     else:
         exit_code = 3
 
-    transcript_path = write_transcript(
-        packet=packet,
-        stdout=stdout,
-        verdict=verdict,
-        fields=fields,
-        exit_code=exit_code,
-        log_path=log_path,
-        out_path=out_path,
-        timestamp=start,
-    )
-    print(f"\n[transcript: {transcript_path}]")
+    # Transcript writing is additive. A filesystem failure here must not crash
+    # the review command or alter the verdict / exit code -- warn and continue.
+    try:
+        transcript_path = write_transcript(
+            packet=packet,
+            stdout=stdout,
+            verdict=verdict,
+            fields=fields,
+            exit_code=exit_code,
+            log_path=log_path,
+            out_path=out_path,
+            timestamp=start,
+        )
+        print(f"\n[transcript: {transcript_path}]")
+    except OSError as exc:
+        print(
+            f"WARNING: Failed to write review transcript: {exc}\n"
+            "The review verdict and exit code are unaffected.",
+            file=sys.stderr,
+        )
 
     if verdict is None:
         print(

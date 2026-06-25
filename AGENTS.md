@@ -2,17 +2,24 @@
 
 ## Scope
 
-VolteX is the coding-assistant coordination platform, not the downstream
-application being built. Revit is deferred and is not active scope; it is
-tracked as downstream work (see [docs/SCOPE.md](docs/SCOPE.md)). These rules
-govern how the agents coordinate that platform.
+VolteX is a multi-agent AI consensus platform for orchestrating software
+development -- the coding-assistant coordination platform, not the downstream
+application being built. Revit is deferred and is not active scope; it is tracked
+as downstream work (see [docs/SCOPE.md](docs/SCOPE.md)). These rules govern the
+current workflow. The planned consensus protocol (Claude proposes; Codex and/or
+ChatGPT review; bounded five-round loop; Shawn approves in plain English) is
+documented in [docs/CONSENSUS_PROTOCOL.md](docs/CONSENSUS_PROTOCOL.md) and is not
+yet implemented.
 
 ## Agents
 
 | Agent  | Role                                              | Branch          | Worktree                              |
 |--------|---------------------------------------------------|-----------------|---------------------------------------|
-| Claude | Orchestrator, implementer, repo hygiene           | `agent/claude`  | `D:\AI-Agents\VolteX\project-claude`  |
-| Codex  | Strategy, review, risk checks, alternate ideas    | `agent/chatgpt` | `D:\AI-Agents\VolteX\project-chatgpt` |
+| Claude | Operator: proposes plans, implements, operates workflow | `agent/claude`  | `D:\AI-Agents\VolteX\project-claude`  |
+| Codex  | Reviewer: local read-only review, structured verdicts   | `agent/chatgpt` | `D:\AI-Agents\VolteX\project-chatgpt` |
+
+Note: `agent/chatgpt` / `project-chatgpt` is a legacy name now used by the Codex
+worker. Codex (reviewer) and ChatGPT (external strategist) are distinct roles.
 
 ## CLI Invocation
 

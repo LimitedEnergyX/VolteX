@@ -13,7 +13,7 @@ It does not directly edit code -- agents do that in their own worktrees.
 
 - Python 3.9+
 - `claude` CLI on PATH (Claude Code, authenticated)
-- `codex` CLI on PATH (when Codex worker is enabled -- not yet installed)
+- `codex` CLI on PATH (Codex worker installed and available via the review bridge)
 
 ## Usage
 
@@ -151,8 +151,6 @@ codex exec --sandbox read-only "<task>"
 
 ## Next Planned Steps
 
-1. Prove live Claude run end-to-end from the orchestrator
-2. Install Codex CLI and enable the codex worker
-3. Add `--issue` flag to pull task text from a GitHub Issue number
-4. Add a Discord webhook status post after each run
-5. Add multi-agent handoff: Claude completes task, Codex reviews the PR
+1. Add `--issue` flag to pull task text from a GitHub Issue number
+2. Add a Discord webhook status post after each run
+3. Add multi-agent handoff: Claude completes task, Codex reviews the PR

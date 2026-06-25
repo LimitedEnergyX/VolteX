@@ -25,9 +25,13 @@ Revit is deferred. VolteX is not the Revit tool -- see Downstream Projects.
 ```
 +- docs/            Scope, consensus protocol, project brief, architecture
 +- orchestrator/    Multi-agent orchestration layer
++- discord_bridge/  Local Discord operator interface (MVP)
 +- AGENTS.md        Rules for AI agent collaboration
 +- README.md
 ```
+
+For the local Discord operator interface MVP, see
+[discord_bridge/README.md](discord_bridge/README.md).
 
 ## Roles
 

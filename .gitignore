@@ -20,6 +20,8 @@ node_modules/
 # Environment / secrets
 .env
 .env.*
+# Allow committing the example template (must come after .env.* above)
+!.env.example
 *.pem
 *.key
 *.p12

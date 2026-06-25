@@ -26,6 +26,12 @@ jobs:
       - name: Compile make_packet
         run: python -m py_compile tools/make_packet.py
 
+      - name: Compile discord bridge bot
+        run: python -m py_compile discord_bridge/bot.py
+
+      - name: Compile discord bridge report
+        run: python -m py_compile discord_bridge/report.py
+
       - name: Smoke test -- orchestrator help
         run: python orchestrator/orchestrator.py --help
 

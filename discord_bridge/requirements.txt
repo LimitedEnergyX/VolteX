@@ -1,0 +1,3 @@
+# VolteX Discord operator interface -- isolated dependency.
+# Install with: pip install -r discord_bridge/requirements.txt
+discord.py>=2.3,<3

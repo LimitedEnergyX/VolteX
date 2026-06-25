@@ -1,51 +1,68 @@
-# VolteX — Project Brief
+# VolteX -- Project Brief
 
 ## What is VolteX?
 
-VolteX is a live Revit integration platform. In spirit it is similar to Plex — a clean, modern
-interface for accessing and interacting with content in real time — but aimed at Revit models
-and BIM workflows.
+VolteX is a multi-agent AI consensus platform for orchestrating software
+development. It is the coding-assistant coordination platform, not the downstream
+application being built. Shawn uses VolteX to coordinate AI coding assistants
+(Claude, Codex, ChatGPT) through a structured, human-approved consensus process,
+so software work is auditable, reviewable, and confidence-checked before anything
+is built.
 
-The name combines *Volt* (energy, live current) and *-ex* (platform suffix), signaling a
-real-time, powered connection to your Revit environment.
+See [SCOPE.md](SCOPE.md) for the canonical scope definition and
+[CONSENSUS_PROTOCOL.md](CONSENSUS_PROTOCOL.md) for the consensus process.
+
+The name combines Volt (energy, live current) and -ex (platform suffix). It now
+denotes the consensus platform itself -- not a Revit or BIM product.
 
 ## Problem
 
-Revit data is largely locked inside desktop sessions. Teams have no lightweight way to:
-- View live model state without opening Revit
-- Stream model data to dashboards or other tools
-- Collaborate across the model in real time
+Coordinating multiple AI coding assistants by hand is error-prone: work is hard
+to review, decisions are not auditable, and there is no safe, repeatable handoff
+between the agents and the human. There is no single control plane that enforces
+review, builds consensus, and keeps a durable record.
 
-## Solution (Vision)
+## Solution
 
-VolteX provides a live bridge to open Revit models, exposing model data as a stream that
-other tools, dashboards, and collaborators can subscribe to.
+VolteX provides that control plane. Claude proposes, Codex and ChatGPT review,
+and the agents iterate in a bounded consensus loop. A recommended solution -- or,
+if the agents cannot agree, a structured decision package -- is presented to Shawn
+in plain English. Nothing proceeds without his approval. Approved work follows a
+proper Git workflow (branch, commit, review, CI, merge, tag/handoff).
 
 ## Current Phase
 
-Architecture and agent workflow foundation.
+Operating the workflow foundation and recording the consensus-platform direction
+in documentation.
 
 **In scope now:**
-- Repository structure and documentation
-- Multi-agent development workflow (Claude + Codex)
-- Proving the headless CLI agent bridge
-- Defining the architecture before writing application code
+- VolteX defined as the multi-agent AI consensus platform
+- Orchestrator dispatch and the Claude-to-Codex structured review bridge
+- CI gate, approval gates, transcripts, handoffs, restore tags
+- Documentation that keeps scope accurate
 
-**Out of scope now:**
-- Revit plugin development
-- UI / frontend
-- Authentication / user management
-- Discord integration (planned later as command/status layer only)
+**Deferred to future PRs (direction, not implemented here):**
+- Discord operator interface
+- Multi-round agent consensus automation
+- Orchestrator, CI, or agent-behavior changes to implement the protocol
+- The Revit tool and any Revit/BIM integration (deferred downstream work)
+
+## Downstream Projects
+
+Separate projects VolteX may help build or refine:
+
+- PLEX: existing tool VolteX may help refine.
+- Purple Rainmaker: existing project VolteX may help maintain or improve.
+- Revit tool: future downstream project VolteX may help build.
+- Other software projects, later.
 
 ## Stakeholders
 
 - Owner: Shawn Tovey / LimitedEnergyX
-- Agents: Claude (orchestrator), Codex (reviewer/strategist)
+- Agents: Claude (operator/implementer), Codex (worker/reviewer), ChatGPT (strategic reviewer)
 
-## Success Criteria — Phase 0
+## Success Criteria
 
-- [ ] Repo scaffolded with README, AGENTS.md, architecture docs
-- [ ] Git worktrees created for both agents
-- [ ] Both CLIs confirmed working in headless mode
-- [ ] Branch protection on `main` enabled
-- [ ] No application code written yet
+- Scope is accurately documented (VolteX = consensus platform, Revit deferred)
+- The multi-agent workflow remains safe, reviewable, and repeatable
+- Every change is gated by consensus review and Shawn's explicit approval

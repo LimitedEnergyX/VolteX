@@ -16,6 +16,7 @@ from pathlib import Path
 
 VOLTEX_ROOT = Path(r"D:\AI-Agents\VolteX")
 LOGS_DIR = VOLTEX_ROOT / "orchestrator" / "logs"
+REVIEWS_DIR = VOLTEX_ROOT / "orchestrator" / "reviews"
 PROTECTED_BRANCH = "main"
 MAX_TURNS = 3
 TIMEOUT_SECONDS = 300
@@ -160,8 +161,142 @@ def parse_verdict(output: str) -> dict:
     return {"verdict": verdict, "fields": fields}
 
 
-def run_review(packet: str, dry_run: bool) -> int:
+def _extract_mission(packet: str) -> str:
+    """Extract mission text for the transcript executive summary."""
+    m = re.search(r"##\s*1\.\s*Mission\s*\n+(.*?)(?:\n##|\Z)", packet, re.DOTALL)
+    if m:
+        text = m.group(1).strip()
+        return text[:300] + "..." if len(text) > 300 else text
+    text = packet.strip()
+    return text[:250] + "..." if len(text) > 250 else text
+
+
+def write_transcript(
+    packet: str,
+    stdout: str,
+    verdict: str | None,
+    fields: dict,
+    exit_code: int,
+    log_path: Path | None,
+    out_path: Path | None,
+    timestamp: datetime,
+) -> Path:
+    """Write a Markdown review transcript. Returns the path written."""
+    FIELD_DEFAULTS = {
+        "CONSTRAINT": "None identified.",
+        "PROPOSED_SOLUTION": "None required.",
+        "COST_IMPACT": "None identified.",
+        "TIMELINE": "None required.",
+        "RECOMMENDATION": "Not provided by reviewer.",
+    }
+
+    what_reviewed = _extract_mission(packet)
+    verdict_line = verdict or "Not determined."
+    rec = fields.get("RECOMMENDATION") or FIELD_DEFAULTS["RECOMMENDATION"]
+    constraint = fields.get("CONSTRAINT") or FIELD_DEFAULTS["CONSTRAINT"]
+    proposed = fields.get("PROPOSED_SOLUTION") or FIELD_DEFAULTS["PROPOSED_SOLUTION"]
+    cost = fields.get("COST_IMPACT") or FIELD_DEFAULTS["COST_IMPACT"]
+    timeline = fields.get("TIMELINE") or FIELD_DEFAULTS["TIMELINE"]
+
+    struct_section = (
+        "\n".join(f"{k}: {v}" for k, v in fields.items()) if fields else "None"
+    )
+
+    if verdict:
+        parsed_lines = [f"VERDICT: {verdict}"]
+        if "RECOMMENDATION" in fields:
+            parsed_lines.append(f"RECOMMENDATION: {fields['RECOMMENDATION']}")
+        parsed_section = "\n".join(parsed_lines)
+    else:
+        parsed_section = "Not determined."
+
+    log_line = str(log_path) if log_path else "Not available."
+    ts_str = timestamp.strftime("%Y-%m-%dT%H:%M:%S")
+
+    content_lines = [
+        "# Review Transcript",
+        "",
+        f"Timestamp : {ts_str}",
+        "Reviewer  : codex",
+        f"Exit code : {exit_code}",
+        "",
+        "---",
+        "",
+        "## Executive Summary",
+        "",
+        f"**What was reviewed:** {what_reviewed}",
+        f"**Verdict:** {verdict_line}",
+        f"**Recommendation:** {rec}",
+        "",
+        "---",
+        "",
+        "## Constraint",
+        "",
+        constraint,
+        "",
+        "---",
+        "",
+        "## Proposed Solution",
+        "",
+        proposed,
+        "",
+        "---",
+        "",
+        "## Cost / Impact",
+        "",
+        cost,
+        "",
+        "---",
+        "",
+        "## Timeline",
+        "",
+        timeline,
+        "",
+        "---",
+        "",
+        "## Agent Technical Record",
+        "",
+        "### Original Packet",
+        "",
+        packet.strip(),
+        "",
+        "### Raw Codex Response",
+        "",
+        stdout.strip() or "(no output)",
+        "",
+        "### Parsed Verdict",
+        "",
+        parsed_section,
+        "",
+        "### Structured Fields",
+        "",
+        struct_section,
+        "",
+        "### Exit Code",
+        "",
+        str(exit_code),
+        "",
+        "### Log File",
+        "",
+        log_line,
+        "",
+    ]
+    transcript = "\n".join(content_lines)
+
+    if out_path is None:
+        REVIEWS_DIR.mkdir(parents=True, exist_ok=True)
+        file_ts = timestamp.strftime("%Y-%m-%d_%H-%M-%S")
+        out_path = REVIEWS_DIR / f"{file_ts}_review.md"
+    else:
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    out_path.write_text(transcript, encoding="utf-8")
+    return out_path
+
+
+def run_review(packet: str, dry_run: bool, out_path: Path | None = None) -> int:
     task = REVIEW_PROMPT_TEMPLATE.format(packet=packet)
+    start = datetime.now()
     rc = run_task("codex", task, dry_run)
 
     if dry_run:
@@ -189,6 +324,36 @@ def run_review(packet: str, dry_run: bool) -> int:
     print("=" * 60)
 
     if verdict is None:
+        exit_code = 1
+    elif verdict == "Approved":
+        exit_code = 0
+    elif verdict == "Approved with changes":
+        exit_code = 2
+    else:
+        exit_code = 3
+
+    # Transcript writing is additive. A filesystem failure here must not crash
+    # the review command or alter the verdict / exit code -- warn and continue.
+    try:
+        transcript_path = write_transcript(
+            packet=packet,
+            stdout=stdout,
+            verdict=verdict,
+            fields=fields,
+            exit_code=exit_code,
+            log_path=log_path,
+            out_path=out_path,
+            timestamp=start,
+        )
+        print(f"\n[transcript: {transcript_path}]")
+    except OSError as exc:
+        print(
+            f"WARNING: Failed to write review transcript: {exc}\n"
+            "The review verdict and exit code are unaffected.",
+            file=sys.stderr,
+        )
+
+    if verdict is None:
         print(
             "WARNING: Codex did not return a structured verdict.\n"
             "Raw output is in the log file above.",
@@ -205,7 +370,7 @@ def run_review(packet: str, dry_run: bool) -> int:
     for field in ("CONSTRAINT", "PROPOSED_SOLUTION", "COST_IMPACT", "TIMELINE", "RECOMMENDATION"):
         print(f"{field}: {fields.get(field, 'Not provided')}")
 
-    return 2 if verdict == "Approved with changes" else 3
+    return exit_code
 
 # ---------------------------------------------------------------------------
 # Core
@@ -333,7 +498,8 @@ def cmd_review(args) -> int:
         packet = Path(args.packet_file).read_text(encoding="utf-8")
     else:
         packet = args.packet
-    return run_review(packet, args.dry_run)
+    out_path = Path(args.out) if args.out else None
+    return run_review(packet, args.dry_run, out_path=out_path)
 
 
 def main() -> int:
@@ -369,8 +535,15 @@ def main() -> int:
         help="Path to a file containing the review packet",
     )
     review_p.add_argument(
+        "--out", metavar="PATH",
+        help=(
+            "Write the review transcript to this path "
+            "(default: orchestrator/reviews/<timestamp>_review.md)"
+        ),
+    )
+    review_p.add_argument(
         "--dry-run", action="store_true",
-        help="Print the Codex command without executing",
+        help="Print the Codex command without executing (no transcript written)",
     )
     review_p.set_defaults(func=cmd_review)
 

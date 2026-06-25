@@ -50,6 +50,9 @@ ehthumbs.db
 logs/
 npm-debug.log*
 
+# Review transcripts
+orchestrator/reviews/
+
 # Temp
 tmp/
 temp/

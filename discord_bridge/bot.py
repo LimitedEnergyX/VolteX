@@ -4,7 +4,9 @@
 Slash commands only. Minimal intents. No message-content intent. Guild-scoped
 command sync. The bot does not mutate GitHub or execute approvals. /voltex review
 runs exactly one Codex read-only review through the existing orchestrator review
-bridge (reused unchanged); all other commands are read-only / template-only.
+bridge (reused unchanged). /voltex dispatch writes a structured Claude task packet
+to a local gitignored outbox and never executes it; all other commands are
+read-only / template-only.
 
 Fail closed: the bot refuses to start unless DISCORD_BOT_TOKEN, VOLTEX_GUILD_ID,
 VOLTEX_ALLOWED_USER_ID, and VOLTEX_ALLOWED_CHANNEL_ID are all set and valid.
@@ -15,7 +17,8 @@ summary to the agent-log channel; if it is unset or invalid, public logging is
 simply skipped and the commands work unchanged.
 
 See discord_bridge/README.md for setup. Commands: /voltex status, /voltex latest,
-/voltex packet, /voltex review, /voltex room-status.
+/voltex packet, /voltex review, /voltex room-status, /voltex dispatch,
+/voltex dispatch-latest.
 """
 
 import os
@@ -28,6 +31,7 @@ from discord import app_commands
 
 import report
 import review_runner
+import dispatch_writer
 
 # Populated by main() at runtime (not at import) so the module stays importable
 # and compilable without configuration present.
@@ -326,6 +330,144 @@ async def review(interaction, packet: str, post_to_log: bool = True):
                 )
     finally:
         _review_in_flight = False
+
+
+def _format_dispatch_log_summary(title, priority, path):
+    """Safe public summary for a /voltex dispatch.
+
+    Public-channel safety: include ONLY the timestamp, command, title, priority,
+    packet path, status, and the execution reminder -- NEVER the task body. The
+    user-supplied title is neutralized (backticks and newlines stripped, shown
+    inline) so it cannot inject Discord markdown, masked links, or spoofed lines,
+    and the path is repo-relative so the host's absolute layout is not disclosed.
+    """
+    ts = datetime.now().isoformat(timespec="seconds")
+    safe_title = title.replace("`", "'").replace("\n", " ").replace("\r", " ")
+    rel_path = dispatch_writer.to_repo_relative(path)
+    lines = [
+        "**VolteX dispatch**",
+        f"- time: {ts}",
+        "- command: /voltex dispatch",
+        f"- title: `{safe_title}`",
+        f"- priority: {priority}",
+        f"- packet: `{rel_path}`",
+        "- status: packet created, not executed",
+        "- Claude execution requires explicit operator instruction.",
+    ]
+    msg = "\n".join(lines)
+    return msg if len(msg) <= 1900 else msg[:1900] + " ..."
+
+
+async def _post_dispatch_to_log(client, summary):
+    """Post a dispatch summary to the agent-log channel. Returns a short status
+    string and never raises. Mentions are disabled so a user-supplied title can
+    never ping the channel. Skipped entirely when the channel is not configured."""
+    chan_id = CONFIG.get("agent_log_channel_id")
+    if not chan_id:
+        return "channel not configured"
+    channel = client.get_channel(chan_id)
+    if channel is None:
+        try:
+            channel = await client.fetch_channel(chan_id)
+        except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+            return "channel not found or not accessible"
+    if not isinstance(channel, discord.abc.Messageable):
+        return "configured channel is not a text channel"
+    try:
+        await channel.send(summary, allowed_mentions=discord.AllowedMentions.none())
+        return "posted"
+    except discord.Forbidden:
+        return "missing permission to post there"
+    except discord.HTTPException as exc:
+        return f"post failed ({exc.__class__.__name__})"
+
+
+@voltex.command(
+    name="dispatch",
+    description="Write a Claude task packet to the local outbox (does NOT execute it)",
+)
+@app_commands.describe(
+    title="Short dispatch title (used in the packet and filename)",
+    task="The task text (inline only -- no files, paths, or attachments)",
+    priority="Task priority (default: normal)",
+    post_to_log="Also post a safe summary to the agent-log channel (default: yes)",
+)
+@app_commands.choices(
+    priority=[
+        app_commands.Choice(name="low", value="low"),
+        app_commands.Choice(name="normal", value="normal"),
+        app_commands.Choice(name="high", value="high"),
+    ]
+)
+async def dispatch(interaction, title: str, task: str,
+                   priority: app_commands.Choice[str] = None,
+                   post_to_log: bool = True):
+    if not _authorized(interaction):
+        await _reject(interaction)
+        return
+    # Ack immediately, then do the (fast) file write. Deferring first guarantees
+    # the 3s interaction ack even if the disk is briefly slow, and makes every
+    # reply below a followup.
+    await interaction.response.defer(ephemeral=True)
+    prio = priority.value if priority is not None else dispatch_writer.DEFAULT_PRIORITY
+    ok, message = dispatch_writer.validate_dispatch(title, task)
+    if not ok:
+        await interaction.followup.send(message, ephemeral=True)
+        return
+    result = dispatch_writer.write_packet(
+        title, task, prio, operator=str(interaction.user)
+    )
+    if not result.ok:
+        await interaction.followup.send(
+            f"Failed to create dispatch packet: {result.error}", ephemeral=True
+        )
+        return
+    reply = (
+        "**Dispatch packet created.**\n"
+        f"- title: {title}\n"
+        f"- priority: {prio}\n"
+        f"- packet: `{result.path}`\n"
+        "Claude has NOT executed this yet -- it runs only after you explicitly "
+        "instruct Claude to use this packet."
+    )
+    await interaction.followup.send(reply, ephemeral=True)
+    # Agent-log logging is additive and must never crash the command: the post and
+    # the failure-notice followup are both guarded.
+    if post_to_log:
+        try:
+            status = await _post_dispatch_to_log(
+                interaction.client,
+                _format_dispatch_log_summary(title, prio, result.path),
+            )
+            if status != "posted":
+                await interaction.followup.send(
+                    f"(agent-log not updated: {status})", ephemeral=True
+                )
+        except (discord.HTTPException, discord.NotFound):
+            pass
+
+
+@voltex.command(
+    name="dispatch-latest",
+    description="Show the latest dispatch packet path and title (body not shown)",
+)
+async def dispatch_latest(interaction):
+    if not _authorized(interaction):
+        await _reject(interaction)
+        return
+    path, title = dispatch_writer.latest_packet()
+    if path is None:
+        await interaction.response.send_message(
+            "No dispatch packet found yet.", ephemeral=True
+        )
+        return
+    await interaction.response.send_message(
+        "**Latest dispatch packet**\n"
+        f"- title: {title}\n"
+        f"- packet: `{path}`\n"
+        "(Task body not shown. Open the file to view the full task.)",
+        ephemeral=True,
+    )
 
 
 @voltex.command(

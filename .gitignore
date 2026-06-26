@@ -55,6 +55,9 @@ npm-debug.log*
 # Review transcripts
 orchestrator/reviews/
 
+# Dispatch packets (local Claude task outbox)
+orchestrator/dispatch_outbox/
+
 # Temp
 tmp/
 temp/

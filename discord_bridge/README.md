@@ -22,6 +22,13 @@ the existing orchestrator bridge; all other commands are read-only / template-on
   there; pass `post_to_log:false` to keep a review private.
 - `/voltex room-status` -- shows bot connection, the operator channel, whether the
   agent-log channel is configured, and review-bridge availability. Read-only.
+- `/voltex dispatch <title> <task> [priority] [post_to_log]` -- writes a structured
+  Claude task packet to the local gitignored outbox `orchestrator/dispatch_outbox/`
+  and (by default) posts a safe summary to the agent-log channel. It does **not**
+  execute anything: Claude runs the task later, manually, only after the operator
+  explicitly instructs it. The public summary never includes the task body.
+- `/voltex dispatch-latest` -- shows the newest dispatch packet's path and title.
+  Read-only; does not print the task body.
 
 ## Agent room (optional)
 
@@ -36,6 +43,30 @@ This is optional and safe:
   and every command works exactly as before.
 - If the bot cannot post there (channel missing or no permission), it reports that
   in the operator's private reply and does **not** crash.
+
+## Dispatch workflow (controlled Claude dispatch)
+
+`/voltex dispatch` is a one-way bridge from a Discord request to a local Claude task
+packet -- never to automatic execution:
+
+```
+Discord /voltex dispatch  ->  local packet in orchestrator/dispatch_outbox/
+                          ->  safe public summary in the agent-log channel
+                          ->  (manual) Claude executes only after the operator says so
+                          ->  normal Codex / ChatGPT review + PR gate
+```
+
+- The packet is a timestamped Markdown file `YYYY-MM-DD_HH-MM-SS_<sanitized-title>.md`
+  containing the title, created timestamp, requester, priority, source, the task,
+  and fixed constraints / required gates / safety boundaries.
+- The outbox `orchestrator/dispatch_outbox/` is gitignored; packets are never committed.
+- The bot validates and length-limits the title and task, sanitizes the filename to
+  `[a-z0-9-]`, accepts no file paths or attachments, and reads no local files.
+- The public agent-log summary includes the title, priority, packet path, and a
+  "packet created, not executed" status -- never the task body. Mentions are disabled.
+- Claude does nothing automatically. The operator must explicitly tell Claude to use
+  a packet; it then runs through the normal Codex / ChatGPT / operator review and PR
+  gate.
 
 ## Requirements
 

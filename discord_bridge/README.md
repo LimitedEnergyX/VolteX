@@ -17,7 +17,25 @@ the existing orchestrator bridge; all other commands are read-only / template-on
   packet text through the existing `orchestrator review` bridge, then returns the
   verdict and transcript path. Inline text only (no file paths, no attachments).
   One review at a time -- a concurrent `/voltex review` is rejected, not queued.
-  The reply clearly separates a review verdict from a bot/process failure.
+  The reply clearly separates a review verdict from a bot/process failure. If the
+  agent-log channel is configured (see below), it also posts a public summary
+  there; pass `post_to_log:false` to keep a review private.
+- `/voltex room-status` -- shows bot connection, the operator channel, whether the
+  agent-log channel is configured, and review-bridge availability. Read-only.
+
+## Agent room (optional)
+
+Set `VOLTEX_AGENT_LOG_CHANNEL_ID` (the numeric ID of `#voltex-agent-log`) to turn
+the server into a shared agent room: after each `/voltex review`, VolteX posts a
+plain-English summary (timestamp, command, verdict, recommendation, transcript
+path, and a read-only reminder) to that channel, while Shawn still gets the
+private ephemeral reply.
+
+This is optional and safe:
+- If `VOLTEX_AGENT_LOG_CHANNEL_ID` is unset or invalid, public logging is skipped
+  and every command works exactly as before.
+- If the bot cannot post there (channel missing or no permission), it reports that
+  in Shawn's private reply and does **not** crash.
 
 ## Requirements
 
@@ -40,6 +58,7 @@ pip install -r discord_bridge/requirements.txt
    - `VOLTEX_GUILD_ID`
    - `VOLTEX_ALLOWED_USER_ID`
    - `VOLTEX_ALLOWED_CHANNEL_ID`
+   - (optional) `VOLTEX_AGENT_LOG_CHANNEL_ID` -- the agent-room log channel (see above)
 
    `.env` is gitignored and must never be committed.
 4. Run the bot:

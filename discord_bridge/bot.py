@@ -10,12 +10,17 @@ Fail closed: the bot refuses to start unless DISCORD_BOT_TOKEN, VOLTEX_GUILD_ID,
 VOLTEX_ALLOWED_USER_ID, and VOLTEX_ALLOWED_CHANNEL_ID are all set and valid.
 Every command checks guild ID, user ID, and channel ID before doing anything.
 
+An optional VOLTEX_AGENT_LOG_CHANNEL_ID enables posting a plain-English review
+summary to the agent-log channel; if it is unset or invalid, public logging is
+simply skipped and the commands work unchanged.
+
 See discord_bridge/README.md for setup. Commands: /voltex status, /voltex latest,
-/voltex packet, /voltex review.
+/voltex packet, /voltex review, /voltex room-status.
 """
 
 import os
 import sys
+from datetime import datetime
 from pathlib import Path
 
 import discord
@@ -85,7 +90,7 @@ def _load_config():
         sys.exit(1)
 
     try:
-        return {
+        cfg = {
             "token": token,
             "guild_id": int(guild_id),
             "user_id": int(user_id),
@@ -98,6 +103,15 @@ def _load_config():
             file=sys.stderr,
         )
         sys.exit(1)
+
+    # Optional agent-room log channel. Unset or invalid -> None; public logging is
+    # simply skipped and the bot never fails because of this value.
+    agent_log = os.environ.get("VOLTEX_AGENT_LOG_CHANNEL_ID", "").strip()
+    try:
+        cfg["agent_log_channel_id"] = int(agent_log) if agent_log else None
+    except ValueError:
+        cfg["agent_log_channel_id"] = None
+    return cfg
 
 
 class VolteXClient(discord.Client):
@@ -222,14 +236,64 @@ def _format_result(result):
     return msg if len(msg) <= 1900 else msg[:1900] + " ..."
 
 
+def _format_log_summary(result):
+    """Plain-English review summary for the public agent-log channel.
+
+    Public-channel safety: include ONLY timestamp, command name, verdict,
+    recommendation, transcript path, and the read-only reminder. NEVER include the
+    review packet text or raw stdout/stderr -- result.error/result.detail are
+    deliberately not used, and public logging only runs for a real verdict
+    (result.ok), so failure output never reaches the channel.
+    """
+    ts = datetime.now().isoformat(timespec="seconds")
+    lines = [
+        "**VolteX review**",
+        f"- time: {ts}",
+        "- command: /voltex review",
+        f"- verdict: {result.verdict}",
+    ]
+    if result.recommendation:
+        lines.append(f"- recommendation: {result.recommendation}")
+    if result.transcript:
+        lines.append(f"- transcript: `{result.transcript}`")
+    lines.append("- Codex ran read-only.")
+    msg = "\n".join(lines)
+    return msg if len(msg) <= 1900 else msg[:1900] + " ..."
+
+
+async def _post_review_to_log(client, summary):
+    """Post a summary to the agent-log channel. Returns a short status string and
+    never raises -- failures are reported, not crashed. Public logging is skipped
+    entirely when the channel is not configured."""
+    chan_id = CONFIG.get("agent_log_channel_id")
+    if not chan_id:
+        return "channel not configured"
+    channel = client.get_channel(chan_id)
+    if channel is None:
+        try:
+            channel = await client.fetch_channel(chan_id)
+        except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+            return "channel not found or not accessible"
+    if not isinstance(channel, discord.abc.Messageable):
+        return "configured channel is not a text channel"
+    try:
+        await channel.send(summary)
+        return "posted"
+    except discord.Forbidden:
+        return "missing permission to post there"
+    except discord.HTTPException as exc:
+        return f"post failed ({exc.__class__.__name__})"
+
+
 @voltex.command(
     name="review",
     description="Run one Codex read-only review of an inline packet (one at a time)",
 )
 @app_commands.describe(
-    packet="The review packet text (inline only -- no files or attachments)"
+    packet="The review packet text (inline only -- no files or attachments)",
+    post_to_log="Also post a summary to the agent-log channel if configured (default: yes)",
 )
-async def review(interaction, packet: str):
+async def review(interaction, packet: str, post_to_log: bool = True):
     global _review_in_flight
     if not _authorized(interaction):
         await _reject(interaction)
@@ -251,8 +315,38 @@ async def review(interaction, packet: str):
         await interaction.response.defer(ephemeral=True)
         result = await review_runner.run_review(packet)
         await interaction.followup.send(_format_result(result), ephemeral=True)
+        # Optional agent-room logging: additive, never blocks the private reply.
+        if post_to_log and result.ok:
+            status = await _post_review_to_log(
+                interaction.client, _format_log_summary(result)
+            )
+            if status != "posted":
+                await interaction.followup.send(
+                    f"(agent-log not updated: {status})", ephemeral=True
+                )
     finally:
         _review_in_flight = False
+
+
+@voltex.command(
+    name="room-status",
+    description="Agent-room status: bot connection, channels, and review bridge",
+)
+async def room_status(interaction):
+    if not _authorized(interaction):
+        await _reject(interaction)
+        return
+    agent_log = CONFIG.get("agent_log_channel_id")
+    bridge = "available" if report.review_bridge_available() else "unavailable"
+    lines = [
+        "**VolteX room status**",
+        f"- bot: connected as {interaction.client.user}",
+        f"- operator channel: configured (<#{CONFIG['channel_id']}>)",
+        "- agent-log channel: "
+        + (f"configured (<#{agent_log}>)" if agent_log else "not configured"),
+        f"- review bridge: {bridge}",
+    ]
+    await interaction.response.send_message("\n".join(lines), ephemeral=True)
 
 
 def main():

@@ -266,8 +266,9 @@ def _format_log_summary(result):
 
 
 async def _post_review_to_log(client, summary):
-    """Post a summary to the agent-log channel. Returns a short status string and
-    never raises -- failures are reported, not crashed. Public logging is skipped
+    """Post a review summary to the agent-log channel. Returns a short status
+    string and never raises -- failures are reported, not crashed. Mentions are
+    disabled so the post can never ping the channel. Public logging is skipped
     entirely when the channel is not configured."""
     chan_id = CONFIG.get("agent_log_channel_id")
     if not chan_id:
@@ -281,7 +282,7 @@ async def _post_review_to_log(client, summary):
     if not isinstance(channel, discord.abc.Messageable):
         return "configured channel is not a text channel"
     try:
-        await channel.send(summary)
+        await channel.send(summary, allowed_mentions=discord.AllowedMentions.none())
         return "posted"
     except discord.Forbidden:
         return "missing permission to post there"

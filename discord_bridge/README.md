@@ -1,10 +1,11 @@
 # VolteX Discord Operator Interface (MVP)
 
-A local Discord bot that lets Shawn query VolteX over slash commands. It is an
-**interface, not an authority**: read-only / template-only, with no Codex
-execution, no GitHub mutation, and no approvals.
+A local Discord bot that lets Shawn query VolteX and trigger one review over slash
+commands. It is an **interface, not an authority**: no GitHub mutation, no merges,
+no approvals. `/voltex review` runs exactly one Codex **read-only** review through
+the existing orchestrator bridge; all other commands are read-only / template-only.
 
-## Scope (PR #10)
+## Scope
 
 - `/voltex status` -- current `main` commit, latest restore tag, worktree status
   summary, and whether the review bridge (codex CLI) is available. Read-only.
@@ -12,9 +13,11 @@ execution, no GitHub mutation, and no approvals.
   verdict if present. Read-only.
 - `/voltex packet` -- displays the canonical review-packet template to copy and
   fill in. Template-only (creates no files).
-
-`/voltex review` (running a Codex review from Discord) is intentionally NOT in
-this MVP; it is planned for PR #11.
+- `/voltex review <packet>` -- runs **one** Codex read-only review of the inline
+  packet text through the existing `orchestrator review` bridge, then returns the
+  verdict and transcript path. Inline text only (no file paths, no attachments).
+  One review at a time -- a concurrent `/voltex review` is rejected, not queued.
+  The reply clearly separates a review verdict from a bot/process failure.
 
 ## Requirements
 

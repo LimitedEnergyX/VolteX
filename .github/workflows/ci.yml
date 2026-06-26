@@ -32,6 +32,9 @@ jobs:
       - name: Compile discord bridge report
         run: python -m py_compile discord_bridge/report.py
 
+      - name: Compile discord bridge review_runner
+        run: python -m py_compile discord_bridge/review_runner.py
+
       - name: Smoke test -- orchestrator help
         run: python orchestrator/orchestrator.py --help
 

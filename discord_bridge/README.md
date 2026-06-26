@@ -67,6 +67,10 @@ pip install -r discord_bridge/requirements.txt
 python discord_bridge/bot.py
 ```
 
+   For repeatable start/stop/restart that prevents duplicate bot processes, use the
+   lifecycle script: `pwsh scripts\voltex_bot.ps1 -Action status|start|stop|restart`
+   (see [../scripts/README.md](../scripts/README.md)).
+
 ## Safety
 
 - Slash commands only. Minimal intents. No message-content intent.

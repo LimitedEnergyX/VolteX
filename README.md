@@ -1,58 +1,56 @@
 # VolteX
 
-VolteX is a multi-agent AI consensus platform for orchestrating software
-development. It is the coding-assistant coordination platform, not the downstream
-application being built. Shawn uses VolteX to coordinate AI coding assistants
-(Claude, Codex, ChatGPT) through a structured, human-approved consensus process,
-so software work is auditable, reviewable, and confidence-checked before anything
-is built.
+VolteX is a general-purpose multi-agent AI consensus platform. AI agents
+collaborate and cross-check each other's work in a bounded, structured loop, then
+present a clear recommendation to the user for approval -- so the user produces
+higher-quality work with confidence. The current implementation focuses on
+software and code review; the same consensus model can extend to other project
+types later.
 
 See [docs/SCOPE.md](docs/SCOPE.md) for the canonical scope definition and
-[docs/CONSENSUS_PROTOCOL.md](docs/CONSENSUS_PROTOCOL.md) for the consensus process
-direction.
+[docs/CONSENSUS_PROTOCOL.md](docs/CONSENSUS_PROTOCOL.md) for the consensus process.
 
 ## Status
 
-Active workflow foundation. The current workflow is the orchestrator review
-bridge: Claude proposes, Codex reviews via a structured verdict, Shawn approves,
-PR-only merges. The broader consensus protocol and the Discord operator interface
-are documented as direction and deferred to future PRs.
-
-Revit is deferred. VolteX is not the Revit tool -- see Downstream Projects.
+The current workflow is the orchestrator review bridge: Claude proposes, Codex
+reviews via a structured verdict, and the user approves, with PR-only merges. A
+local Discord operator interface is live (`/voltex status`, `/voltex latest`,
+`/voltex packet`, `/voltex review`, `/voltex room-status`). The full multi-round
+consensus loop is documented as the target direction.
 
 ## Structure
 
 ```
 +- docs/            Scope, consensus protocol, project brief, architecture
 +- orchestrator/    Multi-agent orchestration layer
-+- discord_bridge/  Local Discord operator interface (MVP)
++- discord_bridge/  Local Discord operator interface
 +- AGENTS.md        Rules for AI agent collaboration
 +- README.md
 ```
 
-For the local Discord operator interface MVP, see
+For the local Discord operator interface, see
 [discord_bridge/README.md](discord_bridge/README.md).
 
 ## Roles
 
-- Shawn: final authority and approval gate.
+- The user: final authority and approval gate.
 - Claude: proposes plans, performs local implementation, operates the workflow.
 - Codex: local read-only review; returns structured verdicts.
-- ChatGPT: strategic validation, conflict review, Shawn-facing plain-English decision review.
-- Desktop Commander and Chrome MCP: execution tools on Jarvis, not decision-makers.
+- ChatGPT: strategic validation, conflict review, user-facing plain-English decision review.
+- Local execution tools (Desktop Commander, Chrome MCP): carry out actions, not decision-makers.
 
 ## Agent Workflow
 
-Claude and Codex collaborate using isolated git worktrees and a strict PR-only
-handoff model. See [AGENTS.md](AGENTS.md) for rules and invocation commands, and
-[docs/CONSENSUS_PROTOCOL.md](docs/CONSENSUS_PROTOCOL.md) for the planned consensus
-loop.
+The agents collaborate using isolated git worktrees and a strict PR-only handoff
+model. See [AGENTS.md](AGENTS.md) for rules and invocation commands, and
+[docs/CONSENSUS_PROTOCOL.md](docs/CONSENSUS_PROTOCOL.md) for the consensus loop.
 
-## Downstream Projects
+## What VolteX Is (and Is Not)
 
-Separate projects VolteX may help build or refine -- not VolteX itself:
+VolteX is the platform for building better things -- it is not the end product
+itself. It coordinates the agents and surfaces decisions to the user; the projects
+the user builds with it are separate.
 
-- PLEX: existing tool VolteX may help refine.
-- Purple Rainmaker: existing project VolteX may help maintain or improve.
-- Revit tool: future downstream project VolteX may help build.
-- Other software projects, later.
+---
+
+Built by Shawn C. Tovey, RCDD / LimitedEnergyX.

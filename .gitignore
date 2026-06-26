@@ -60,9 +60,3 @@ tmp/
 temp/
 *.tmp
 *.bak
-
-# Revit (future)
-*.rvt
-*.rfa
-*.rte
-*.rft

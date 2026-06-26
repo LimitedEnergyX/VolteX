@@ -1,6 +1,6 @@
 # VolteX Discord Operator Interface (MVP)
 
-A local Discord bot that lets Shawn query VolteX and trigger one review over slash
+A local Discord bot that lets the operator query VolteX and trigger one review over slash
 commands. It is an **interface, not an authority**: no GitHub mutation, no merges,
 no approvals. `/voltex review` runs exactly one Codex **read-only** review through
 the existing orchestrator bridge; all other commands are read-only / template-only.
@@ -28,14 +28,14 @@ the existing orchestrator bridge; all other commands are read-only / template-on
 Set `VOLTEX_AGENT_LOG_CHANNEL_ID` (the numeric ID of `#voltex-agent-log`) to turn
 the server into a shared agent room: after each `/voltex review`, VolteX posts a
 plain-English summary (timestamp, command, verdict, recommendation, transcript
-path, and a read-only reminder) to that channel, while Shawn still gets the
+path, and a read-only reminder) to that channel, while the operator still gets the
 private ephemeral reply.
 
 This is optional and safe:
 - If `VOLTEX_AGENT_LOG_CHANNEL_ID` is unset or invalid, public logging is skipped
   and every command works exactly as before.
 - If the bot cannot post there (channel missing or no permission), it reports that
-  in Shawn's private reply and does **not** crash.
+  in the operator's private reply and does **not** crash.
 
 ## Requirements
 

@@ -6,68 +6,51 @@ file and link here.
 
 ## What VolteX Is
 
-VolteX is a multi-agent AI consensus platform for orchestrating software
-development. Its purpose is to coordinate AI coding assistants through a
-structured, human-approved consensus process so that software work is auditable,
-reviewable, and confidence-checked before anything is built.
+VolteX is a general-purpose multi-agent AI consensus platform. Its purpose is to
+coordinate AI agents through a structured, user-approved consensus process so that
+work is auditable, reviewable, and confidence-checked before anything is built.
+The current implementation focuses on software and code review; the same consensus
+model can extend to other project types later.
 
-VolteX is the coding-assistant coordination platform, not the downstream
-application being built.
+VolteX is the platform for building better things -- not the end product itself.
 
 It coordinates:
 
-- Shawn: the final authority and approval gate.
-- Claude: proposes plans, performs local implementation, and operates the
-  workflow.
+- The user: the final authority and approval gate.
+- Claude: proposes plans, performs local implementation, and operates the workflow.
 - Codex: performs local read-only review and returns structured verdicts.
-- ChatGPT: provides strategic validation, conflict review, and Shawn-facing
+- ChatGPT: provides strategic validation, conflict review, and user-facing
   plain-English decision review.
-- Desktop Commander and Chrome MCP: execution tools on Jarvis (write code,
-  navigate GitHub, fill forms, manage the local environment). They are tools, not
-  independent decision-makers.
+- Local execution tools (Desktop Commander, Chrome MCP): carry out actions (write
+  code, navigate GitHub, fill forms, manage the local environment). They are
+  tools, not independent decision-makers.
 
 The consensus process itself is defined in
 [CONSENSUS_PROTOCOL.md](CONSENSUS_PROTOCOL.md).
 
 ## What VolteX Is Not
 
-- VolteX is not PLEX.
-- VolteX is not Purple Rainmaker.
-- VolteX is not the Revit tool.
-- VolteX is not a Revit or BIM integration product.
-- VolteX does not itself implement downstream applications.
+- VolteX is not the end product the user builds with it.
+- VolteX does not itself implement the user's applications.
 
-VolteX is the platform Shawn uses to coordinate coding assistants and build or
-refine downstream projects.
-
-## Downstream Projects
-
-Separate projects that VolteX may help build or refine. They are not VolteX
-itself:
-
-- PLEX: existing tool VolteX may help refine.
-- Purple Rainmaker: existing project VolteX may help maintain or improve.
-- Revit tool: future downstream project VolteX may help build.
-- Other software projects, later.
+VolteX is the coordination layer: it helps the user produce better projects, then
+gets out of the way.
 
 ## Current Scope
 
 In scope now:
-- Defining VolteX as the multi-agent AI consensus platform and recording the
-  agreed direction in documentation.
+- Defining VolteX as the general-purpose multi-agent AI consensus platform.
 - The current workflow foundation: orchestrator dispatch and the Claude-to-Codex
-  structured review bridge, gated by CI and Shawn's approval, with PR-only merges.
+  structured review bridge, gated by CI and the user's approval, with PR-only
+  merges.
+- The local Discord operator interface (status, latest, packet, review,
+  room-status).
 
-Deferred to future PRs (documented as direction, not implemented here):
-- The Discord operator interface.
-- Multi-round agent consensus automation.
-- Any orchestrator, CI, or agent-behavior changes needed to implement the
-  consensus protocol.
-- The Revit tool and any Revit/BIM integration (deferred downstream work, tracked
-  under GitHub Issue #4).
+Direction (documented, not yet implemented):
+- The full multi-round agent consensus loop (see CONSENSUS_PROTOCOL.md).
+- Extending the consensus model to non-software project types.
 
 ## Why the Name Stays
 
-VolteX keeps its name. The name now denotes the consensus platform itself, not a
-Revit or BIM product. Earlier docs framed VolteX around Revit and BIM; that
-framing is superseded by this file.
+VolteX keeps its name; it denotes the consensus platform itself. The name combines
+Volt (energy, live current) and -ex (platform suffix).

@@ -130,7 +130,7 @@ Logs are written outside the git repo and are not committed.
 
 - Fixed Windows paths (`D:\AI-Agents\VolteX\`). Not portable across machines.
 - Single-turn dispatch only. No multi-step task chaining yet.
-- No Discord integration. Status reporting is console and log file only.
+- The orchestrator itself reports to console and log files only; the live Discord operator interface is provided separately by `discord_bridge/` (see `discord_bridge/README.md`).
 - Codex worker resolves binary via: `CODEX_CLI_PATH` env var -> PATH -> `C:\Users\RDPJarvis\AppData\Local\Programs\OpenAI\Codex\bin\codex.exe`.
 - Codex write-capable mode (`--sandbox workspace-write`) is not enabled.
 - Claude subprocess auth requires an authenticated terminal session.
@@ -152,5 +152,4 @@ codex exec --sandbox read-only "<task>"
 ## Next Planned Steps
 
 1. Add `--issue` flag to pull task text from a GitHub Issue number
-2. Add a Discord webhook status post after each run
-3. Add multi-agent handoff: Claude completes task, Codex reviews the PR
+2. Add multi-agent handoff: Claude completes task, Codex reviews the PR

@@ -1,49 +1,48 @@
-# VolteX -- Consensus Protocol (Direction)
+# VolteX -- Consensus Protocol
 
-**Status: direction only.** This document records the agreed design for VolteX's
-multi-agent consensus process. It is not yet implemented. No orchestrator code,
-CI, or agent behavior in this repo implements this protocol today; implementation
-is deferred to future PRs. Until then, the active workflow remains the current
-orchestrator review bridge (Claude proposes, Codex reviews via a structured
-verdict, Shawn approves, PR-only merges).
+This document records the design for VolteX's multi-agent consensus process. The
+active workflow today is the single-pass orchestrator review bridge (Claude
+proposes, Codex reviews via a structured verdict, the user approves, PR-only
+merges); the full multi-round loop below is the target direction.
 
 ## Purpose
 
-VolteX coordinates AI coding assistants so that software work is auditable,
-reviewable, and confidence-checked before anything is built. The consensus
-protocol is how proposals are reviewed and how decisions reach Shawn.
+VolteX coordinates AI agents so that work is auditable, reviewable, and
+confidence-checked before anything is built. The consensus protocol is how
+proposals are reviewed and how decisions reach the user. The current
+implementation focuses on software and code review; the same model can extend to
+other project types later.
 
 ## Roles
 
-- Shawn: final authority and approval gate.
-- Claude: proposes plans, performs local implementation, and operates the
-  workflow.
+- The user: final authority and approval gate.
+- Claude: proposes plans, performs local implementation, and operates the workflow.
 - Codex: performs local read-only review and returns structured verdicts.
-- ChatGPT: provides strategic validation, conflict review, and Shawn-facing
+- ChatGPT: provides strategic validation, conflict review, and user-facing
   plain-English decision review.
-- Desktop Commander and Chrome MCP: execution tools on Jarvis (write code,
-  navigate GitHub, fill forms, manage the local environment). They are tools, not
-  independent decision-makers.
+- Local execution tools (Desktop Commander, Chrome MCP): carry out actions. They
+  are tools, not independent decision-makers.
 
-## Consensus Loop (planned)
+## Consensus Loop
 
 1. Claude proposes an approach.
 2. Codex and/or ChatGPT review the approach.
 3. Agents may use condensed, high-efficiency technical language in agent-facing
    discussion.
-4. Shawn-facing summaries are always plain English.
-5. Agent discussion is limited to five rounds unless Shawn explicitly extends it.
+4. User-facing summaries are always plain English.
+5. Agent discussion is limited to five rounds unless the user explicitly extends
+   it.
 
 ## Consensus Criteria
 
 Consensus means the reviewing agents recommend the same primary solution and do
-not identify unresolved blocking risks. When consensus is reached, the
-recommended solution is presented to Shawn in plain English for approval.
+not identify unresolved blocking risks. When consensus is reached, the recommended
+solution is presented to the user in plain English for approval.
 
-## No-Consensus Path
+## No-Consensus Path (RFI)
 
-If consensus is not reached after five rounds, the agents present a structured
-decision package:
+If consensus is not reached after five rounds, the agents present the user with an
+RFI-style decision package:
 
 - Constraint
 - Proposed solutions
@@ -52,12 +51,12 @@ decision package:
 - Estimated timeline
 - Recommendation (if any)
 
-Shawn makes the final call. Both agents execute Shawn's directive without further
-debate.
+The user makes the final call. The agents then execute the user's directive
+without further debate.
 
 ## Human in the Loop
 
-Non-negotiable: no action is taken without Shawn's explicit approval at each
+Non-negotiable: no action is taken without the user's explicit approval at each
 decision gate.
 
 ## Git Workflow
@@ -71,17 +70,16 @@ All approved work follows a proper Git workflow:
 - merge
 - tag or handoff when appropriate
 
-## Planned Operator Interface
+## Operator Interface
 
-Discord, running locally on Jarvis, is the planned operator interface:
-
-- one channel for agent consensus traffic
-- one channel for Shawn-facing plain-English decisions and approvals
-
-Discord is not implemented in this PR and is deferred to a future PR.
+A local Discord operator interface is live: the user runs slash commands
+(`/voltex status`, `/voltex latest`, `/voltex packet`, `/voltex review`,
+`/voltex room-status`), and `/voltex review` can post a plain-English summary to an
+optional agent-log channel. See
+[../discord_bridge/README.md](../discord_bridge/README.md).
 
 ## Implementation Status
 
-Everything in this document is direction, not current behavior. Discord,
-multi-round consensus automation, and any orchestrator, CI, or agent-behavior
-changes needed to implement this protocol are deferred to future PRs.
+The single-pass review bridge and the Discord operator interface are live. The
+full multi-round consensus loop and any further automation remain the documented
+direction.
